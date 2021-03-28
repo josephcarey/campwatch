@@ -15,16 +15,20 @@ import {
   NumberInputStepper,
   NumberIncrementStepper,
   NumberDecrementStepper,
+  Toast,
+  useToast,
 } from "@chakra-ui/react";
 
 import { useFormik } from "formik";
 import { DateTime } from "luxon";
 
+import { constructAvailabilityRequestUrl } from "../../../pages/api/availability";
+
 import { parksData, rentalTypeDate } from "../../../constants/campsite-data";
 
-import { checkAvailability } from "../../../utils/check-availability";
-
 export default function QuickCheck() {
+  const toast = useToast();
+
   const formik = useFormik({
     initialValues: {
       park: "92",
@@ -32,14 +36,54 @@ export default function QuickCheck() {
       nights: "2",
       rentalType: "25",
     },
-    onSubmit: (values) => {
-      checkAvailability({
+    onSubmit: async (values) => {
+      const url = constructAvailabilityRequestUrl({
         placeId: Number(values.park),
         arrivalDate: DateTime.fromISO(values.arrivalDate).toLocaleString(),
         nights: Number(values.nights),
         categoryId: Number(values.rentalType),
       });
-      alert(JSON.stringify(values, undefined, 2));
+
+      const response = await fetch(url);
+      let json = "something went wrong";
+      if (response.ok) {
+        // if HTTP-status is 200-299
+        // get the response body (the method explained below)
+        json = await response.json();
+      } else {
+        alert("HTTP-Error: " + response.status);
+      }
+      if (json.checked === false) {
+        // we failed to check
+        toast({
+          title: "Server Error.",
+          description: "Something went wrong checking the availability.",
+          status: "error",
+          duration: 9000,
+          isClosable: true,
+        });
+      }
+      if (json.availability === false) {
+        // no availability
+        toast({
+          title: "Unavailable.",
+          description:
+            "No dice -- try again later, or try configuring an alert.",
+          status: "warning",
+          duration: 9000,
+          isClosable: true,
+        });
+      }
+      if (json.availability === true) {
+        // available!
+        toast({
+          title: "Available!",
+          description: "There's availability matching your search!",
+          status: "success",
+          duration: 9000,
+          isClosable: true,
+        });
+      }
     },
   });
   return (
